@@ -1,5 +1,14 @@
 # _OCP CAD Viewer_ for VS Code
 
+Disclaimer: 
+I tested and looked over the code myself, and any errors I own as myine, but it is largely written using Claude code. 
+
+Changes made: 
+- enabled talking to new build123d.provenance that maps line of code -> objects (edges, faces, etc)
+- added a tool (click the brackets) that allows selecting edges / faces -> in vscode it jumps to line of code that generated them
+- added a script in /examples/test_source_location.py to demonstrate functionality
+
+
 _OCP CAD Viewer_ for VS Code is an extension to show [CadQuery](https://github.com/cadquery/cadquery) and [build123d](https://github.com/gumyr/build123d) objects in VS Code via the [three-cad-viewer](https://github.com/bernhard-42/three-cad-viewer) viewer component.
 
 ![](screenshots/overview.png)
