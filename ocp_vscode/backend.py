@@ -55,6 +55,8 @@ class Tool:
 
     Distance = "DistanceMeasurement"
     Properties = "PropertiesMeasurement"
+    Select = "SelectObjects"
+    SourceLocation = "SourceLocation"
 
 
 def print_to_stdout(*msg):
@@ -88,6 +90,8 @@ class ViewerBackend:
     def __init__(self, port: int, jcv_id=None) -> None:
         self.port = port
         self.model = None
+        self.provenance = {}
+        self.source_location_mode = False
         self.activated_tool = None
         self.filter_type = "none"  # The current active selection filter
         self.jcv_id = jcv_id
@@ -109,7 +113,13 @@ class ViewerBackend:
         Dispatch the event to the appropriate handler
         """
         if event_type == MessageType.DATA:
-            self.load_model(message)
+            if isinstance(message, dict) and "model" in message:
+                self.load_model(message["model"])
+                self.provenance = message.get("provenance", {})
+                self.source_location_mode = bool(self.provenance)
+            else:
+                self.load_model(message)
+                self.source_location_mode = False
         elif event_type == MessageType.UPDATES:
             changes = message
 
@@ -142,6 +152,10 @@ class ViewerBackend:
         elif self.activated_tool == Tool.Properties and len(selected_objs) == 2:
             shape_id = changes["selectedShapeIDs"][0]
             return self.handle_properties(shape_id)
+
+        elif self.activated_tool == Tool.SourceLocation and len(selected_objs) == 2:
+            shape_id = changes["selectedShapeIDs"][0]
+            return self.handle_source_location(shape_id)
 
     def load_model(self, raw_model):
         """Read the transferred model from websocket"""
@@ -213,6 +227,36 @@ class ViewerBackend:
         else:
             send_response(response, self.port)
             print_to_stdout(f"Data sent {response}")
+
+    def handle_source_location(self, shape_id):
+        """Look up provenance for the selected shape and send it to the extension."""
+        if not is_jupyter_cadquery:
+            print_to_stdout(f"Source location requested for '{shape_id}'")
+
+        locations = self.provenance.get(shape_id, [])
+
+        response = {
+            "type": "backend_response",
+            "subtype": "source_location",
+            "tool_type": Tool.SourceLocation,
+            "locations": locations,
+        }
+
+        if is_jupyter_cadquery:
+            return response
+
+        send_response(response, self.port)
+
+        # Send a dummy properties response so three-cad-viewer's
+        # PropertiesMeasurement stops polling for a result.
+        dummy = {
+            "type": "backend_response",
+            "subtype": "tool_response",
+            "tool_type": Tool.Properties,
+            "groups": [],
+        }
+        send_response(dummy, self.port)
+        print_to_stdout(f"Source locations sent: {locations}")
 
     def handle_distance(self, id1, id2, center):
         """

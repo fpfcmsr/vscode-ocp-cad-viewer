@@ -84,6 +84,7 @@ from ocp_vscode.utils import (
     set_last_paths,
 )
 from ocp_vscode.config import (
+    AnalysisTool,
     Camera,
     Collapse,
     Render,
@@ -92,6 +93,7 @@ from ocp_vscode.config import (
     get_changed_config,
     get_defaults,
     preset,
+    set_defaults,
     validate_tool_args,
 )
 
@@ -108,7 +110,43 @@ __all__ = [
     "show_clear",
     "save_screenshot",
     "none_filter",
+    "enable_source_location",
 ]
+
+
+def _auto_enable_provenance(analysis_tool):
+    """Auto-enable build123d provenance when source_location tool is requested."""
+    if analysis_tool in ("source_location", AnalysisTool.SOURCE_LOCATION):
+        try:
+            from build123d.provenance import enable_provenance
+
+            enable_provenance()
+        except ImportError:
+            pass
+
+
+def enable_source_location():
+    """Enable click-face-to-jump-to-source. Call before building your model.
+
+    This enables provenance tracking in build123d and sets the viewer's
+    analysis tool to source_location. After calling this, every ``show()``
+    call will transmit provenance data and clicking a face in the viewer
+    will jump to the Python line that created it.
+
+    Raises:
+        ImportError: If build123d is not installed.
+    """
+    try:
+        from build123d.provenance import enable_provenance
+
+        enable_provenance()
+    except ImportError:
+        raise ImportError(
+            "enable_source_location() requires build123d. "
+            "Install it with: pip install build123d"
+        ) from None
+    set_defaults(analysis_tool="source_location")
+
 
 OBJECTS = {
     "objs": [],
@@ -844,6 +882,8 @@ def _show(*cad_objs, **kwargs):
         print("show: No CAD objects to show")
         return
 
+    _auto_enable_provenance(kwargs.get("analysis_tool"))
+
     kwargs = {
         k: v
         for k, v in kwargs.items()
@@ -936,14 +976,34 @@ def _show(*cad_objs, **kwargs):
     if is_pytest():
         return t, mapping
 
+    provenance_payload = None
+    try:
+        from build123d.provenance import (
+            is_provenance_enabled,
+            build_provenance_map,
+            clear as clear_provenance,
+        )
+        if is_provenance_enabled():
+            provenance_payload = build_provenance_map(mapping)
+            clear_provenance()
+    except ImportError:
+        pass
+    except Exception as e:
+        import warnings
+        warnings.warn(f"Provenance collection failed: {e}", stacklevel=2)
+
     with Timer(timeit, "", "send"):
         viewer = send_data(t, port=port, timeit=timeit)
 
+    backend_data = {"model": mapping}
+    if provenance_payload:
+        backend_data["provenance"] = provenance_payload
+
     if is_jupyter_cadquery:
-        send_backend({"model": mapping}, jcv_id=viewer.widget.id, timeit=timeit)
+        send_backend(backend_data, jcv_id=viewer.widget.id, timeit=timeit)
         return viewer
     else:
-        send_backend({"model": mapping}, port=port, timeit=timeit)
+        send_backend(backend_data, port=port, timeit=timeit)
 
 
 def reset_show():

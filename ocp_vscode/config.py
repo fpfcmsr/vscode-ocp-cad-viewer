@@ -141,6 +141,7 @@ class AnalysisTool(Enum):
     PROPERTIES = "properties"
     DISTANCE = "distance"
     SELECT = "select"
+    SOURCE_LOCATION = "source_location"  # activates select tool with provenance lookup
     OFF = "off"
 
 
@@ -316,18 +317,32 @@ def validate_tool_args(explode, analysis_tool):
         "properties",
         "distance",
         "select",
+        "source_location",
         "off",
     ):
         raise ValueError(
             f"analysis_tool must be an AnalysisTool member or one of "
-            f'"properties", "distance", "select", "off"; got {analysis_tool!r}'
+            f'"properties", "distance", "select", "source_location", "off"; got {analysis_tool!r}'
         )
-    if explode is True and analysis_tool in ("properties", "distance", "select"):
+    if explode is True and analysis_tool in ("properties", "distance", "select", "source_location"):
         raise ValueError(
             "explode=True and analysis_tool=... are mutually exclusive — "
             "the viewer disables one when the other activates. "
             "Pass at most one of them in a single call."
         )
+
+
+def _auto_enable_provenance(analysis_tool):
+    """Auto-enable build123d provenance when source_location tool is requested."""
+    if isinstance(analysis_tool, AnalysisTool):
+        analysis_tool = analysis_tool.value
+    if analysis_tool == "source_location":
+        try:
+            from build123d.provenance import enable_provenance
+
+            enable_provenance()
+        except ImportError:
+            pass
 
 
 # pylint: disable=too-many-arguments,unused-argument,too-many-locals
@@ -391,6 +406,7 @@ def set_viewer_config(
 ):
     """Set viewer config"""
     validate_tool_args(explode, analysis_tool)
+    _auto_enable_provenance(analysis_tool)
 
     if not is_jupyter_cadquery and port is None:
         port = get_port()
@@ -633,6 +649,7 @@ def set_defaults(
     """
 
     validate_tool_args(explode, analysis_tool)
+    _auto_enable_provenance(analysis_tool)
 
     kwargs = {k: v for k, v in locals().items() if v is not None}
 
