@@ -23,6 +23,14 @@ limitations under the License.
         <meta charset="utf-8" />
         <title>OCP CAD Viewer</title>
         <link rel="stylesheet" href="{{ styleSrc }}" />
+        <style>
+            .tcv_button_source {
+                background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='26' height='26' viewBox='0 -26 26 26'%3E%3Ctext x='3' y='-6' font-family='monospace' font-size='16' font-weight='bold' fill='%2353a0e3'%3E%7B%7D%3C/text%3E%3C/svg%3E");
+                background-size: 26px 26px;
+                background-repeat: no-repeat;
+                background-position: center;
+            }
+        </style>
         {{ standalone_scripts|safe }}
         <script type="module">
             import { Viewer, Display, Timer } from "{{ scriptSrc }}";
@@ -244,6 +252,7 @@ limitations under the License.
                         changed = true;
                     }
                 });
+
                 if (viewer != null && viewer.treeview != null) {
                     // ensure to clone the object
                     const states_json = JSON.stringify(viewer.treeview.getStates());
@@ -313,6 +322,46 @@ limitations under the License.
                 };
             }
 
+            function addSourceLocationButton(v) {
+                const d = v.display;
+                const propsBtn = d.clickButtons["properties"];
+                if (!propsBtn) return;
+
+                const ClickButton = propsBtn.constructor;
+                const theme = d.theme || "light";
+
+                const originalSetTool = d.setTool;
+                d.setTool = (name, flag) => {
+                    if (name === "source") {
+                        originalSetTool("properties", flag);
+                        if (flag) {
+                            v.checkChanges({ activeTool: "SourceLocation" });
+                        }
+                    } else {
+                        originalSetTool(name, flag);
+                    }
+                };
+
+                const sourceBtn = new ClickButton(
+                    theme, "source", "Jump to source code", d.setTool
+                );
+                d.clickButtons["source"] = sourceBtn;
+                sourceBtn.setId(d.cadTool.id);
+                d.cadTool.buttons[sourceBtn.name] = sourceBtn;
+                d.cadTool.toggles[3].push(sourceBtn);
+                const selectEl = d.clickButtons["select"].html;
+                selectEl.parentNode.insertBefore(sourceBtn.html, selectEl.nextSibling);
+
+                const group = [
+                    d.clickButtons["explode"],
+                    d.clickButtons["distance"],
+                    d.clickButtons["properties"],
+                    d.clickButtons["select"],
+                    sourceBtn,
+                ].filter(Boolean);
+                d.cadTool.defineGroup(group);
+            }
+
             function showViewer(meshData, config) {
                 debugLog("showViewer called");
                 _meshData = meshData;
@@ -341,6 +390,7 @@ limitations under the License.
                     viewer.clear();
                 } else {
                     viewer = new Viewer(display, displayOptions, nc, null);
+                    addSourceLocationButton(viewer);
                 }
 
                 if (_shapes) render();
@@ -632,9 +682,12 @@ limitations under the License.
                 if (
                     _config.analysis_tool === "distance" ||
                     _config.analysis_tool === "properties" ||
-                    _config.analysis_tool === "select"
+                    _config.analysis_tool === "select" ||
+                    _config.analysis_tool === "source_location"
                 ) {
-                    viewer.display.setTool(_config.analysis_tool, true);
+                    const toolName = _config.analysis_tool === "source_location"
+                        ? "source" : _config.analysis_tool;
+                    viewer.display.setTool(toolName, true);
                 }
 
                 // _config.tab is applied via viewerOptions.tab above so the
@@ -852,23 +905,22 @@ limitations under the License.
                             viewer.setExplode(data.config[key]);
                         } else if (key === "analysis_tool") {
                             const newTool = data.config[key];
-                            // Deactivate whichever measurement tool is active.
-                            // setTool(name, false) is a no-op if name wasn't on,
-                            // so this is safe.
                             const active = viewer.state.get("activeTool");
                             if (
                                 typeof active === "string" &&
-                                ["distance", "properties", "select"].includes(active)
+                                ["distance", "properties", "select", "source"].includes(active)
                             ) {
                                 viewer.display.setTool(active, false);
                             }
-                            // Activate the new one ("off" leaves everything off).
                             if (
                                 newTool === "distance" ||
                                 newTool === "properties" ||
-                                newTool === "select"
+                                newTool === "select" ||
+                                newTool === "source_location"
                             ) {
-                                viewer.display.setTool(newTool, true);
+                                const mapped = newTool === "source_location"
+                                    ? "source" : newTool;
+                                viewer.display.setTool(mapped, true);
                             }
                         } else if (key === "states") {
                             const states = Object.keys(viewer.treeview.getStates());
