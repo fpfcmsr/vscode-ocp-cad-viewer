@@ -623,6 +623,12 @@
           },
           "order": 60
         },
+        "OcpCadViewer.advanced.enableSourceLocation": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable click-to-source-line: click a face in the viewer to jump to the Python code that created it (requires build123d provenance to be enabled)",
+          "order": 70
+        },
         "OcpCadViewer.snippets.dotVscodeSnippets": {
           "type": "object",
           "description": "Python snippets to help writing CAD code",

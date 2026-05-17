@@ -16,6 +16,7 @@
 */
 
 import * as os from "os";
+import * as path from "path";
 import * as vscode from "vscode";
 import { OCPCADViewer } from "./viewer";
 import { template } from "./display";
@@ -248,7 +249,16 @@ export class OCPCADController {
                                 );
                             }
                         } else if (messageType === "R") {
-                            this.view?.postMessage(data);
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.subtype === "source_location") {
+                                    this.jumpToSource(parsed.locations);
+                                } else {
+                                    this.view?.postMessage(data);
+                                }
+                            } catch {
+                                this.view?.postMessage(data);
+                            }
                             output.debug("OCPCADController.messages: Backend response received.");
                         }
                     } catch (error: any) {
@@ -425,5 +435,103 @@ export class OCPCADController {
         this.statusController.refresh("<none>");
         this.statusBarItem.hide();
         output.info("OCPCADController.dispose: Server is shut down");
+    }
+
+    private sourceLocationDecoration: vscode.TextEditorDecorationType | undefined;
+
+    private async jumpToSource(
+        locations: Array<{ file: string; line: number; op: string }>
+    ) {
+        if (!locations || locations.length === 0) {
+            vscode.window.showInformationMessage(
+                "No source location found for this shape."
+            );
+            return;
+        }
+
+        const workspaceFolders =
+            vscode.workspace.workspaceFolders?.map((f) => f.uri.fsPath) ?? [];
+        const validLocations = locations.filter(
+            (loc) =>
+                loc.file &&
+                typeof loc.line === "number" &&
+                workspaceFolders.some((folder) => loc.file.startsWith(folder))
+        );
+
+        if (validLocations.length === 0) {
+            vscode.window.showInformationMessage(
+                "Source locations are outside the workspace."
+            );
+            return;
+        }
+
+        if (this.sourceLocationDecoration) {
+            this.sourceLocationDecoration.dispose();
+        }
+
+        let target: { file: string; line: number; op: string };
+
+        if (validLocations.length > 1) {
+            const items = validLocations.map((loc) => ({
+                label: loc.op,
+                description: `${path.basename(loc.file)}:${loc.line}`,
+                location: loc,
+            }));
+            const picked = await vscode.window.showQuickPick(items, {
+                placeHolder: "Select source location to jump to",
+            });
+            if (!picked) {
+                return;
+            }
+            target = picked.location;
+        } else {
+            target = validLocations[0];
+        }
+
+        const uri = vscode.Uri.file(target.file);
+
+        try {
+            const doc = await vscode.workspace.openTextDocument(uri);
+            const editor = await vscode.window.showTextDocument(doc, {
+                viewColumn: vscode.ViewColumn.One,
+                preserveFocus: false,
+            });
+
+            this.sourceLocationDecoration =
+                vscode.window.createTextEditorDecorationType({
+                    backgroundColor: new vscode.ThemeColor(
+                        "editor.findMatchHighlightBackground"
+                    ),
+                    isWholeLine: true,
+                });
+
+            const ranges = validLocations.map((loc) => {
+                const l = loc.line - 1;
+                return new vscode.Range(l, 0, l, Number.MAX_VALUE);
+            });
+
+            const targetLine = target.line - 1;
+            const targetPos = new vscode.Position(targetLine, 0);
+            editor.selection = new vscode.Selection(targetPos, targetPos);
+            editor.revealRange(
+                new vscode.Range(targetLine, 0, targetLine, 0),
+                vscode.TextEditorRevealType.InCenter
+            );
+            editor.setDecorations(this.sourceLocationDecoration, ranges);
+
+            setTimeout(() => {
+                this.sourceLocationDecoration?.dispose();
+                this.sourceLocationDecoration = undefined;
+            }, 5000);
+
+            output.info(
+                `Jumped to source: ${target.file}:${target.line} (${target.op})`
+            );
+        } catch (err: any) {
+            output.error(`Failed to jump to source: ${err.message}`);
+            vscode.window.showErrorMessage(
+                `Could not open ${target.file}: ${err.message}`
+            );
+        }
     }
 }

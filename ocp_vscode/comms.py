@@ -276,7 +276,7 @@ def listener(callback):
 
                     message = json.loads(message)
                     if "model" in message.keys():
-                        callback(message["model"], MessageType.DATA)
+                        callback(message, MessageType.DATA)
 
                     if message.get("command") == "status":
                         changes = message["text"]
