@@ -959,6 +959,37 @@ limitations under the License.
                             viewer.setZebraMappingMode(data.config[key]);
                         }
                     });
+                } else if (data.type === "highlight_shapes") {
+                    if (viewer == null) return;
+
+                    viewer.clearSelection();
+
+                    const shapeIds = data.shape_ids || [];
+                    const ng = viewer.rendered.nestedGroup;
+                    let highlighted = 0;
+
+                    for (const shapeId of shapeIds) {
+                        const obj = ng.groups[shapeId];
+                        if (obj && obj.isObjectGroup) {
+                            obj.highlight(true);
+                            highlighted++;
+                        }
+                    }
+
+                    viewer.update(true);
+                    debugLog("highlight_shapes", `Highlighted ${highlighted}/${shapeIds.length} shapes`);
+
+                    if (data.auto_clear > 0) {
+                        setTimeout(() => {
+                            for (const shapeId of shapeIds) {
+                                const obj = ng.groups[shapeId];
+                                if (obj && obj.isObjectGroup) {
+                                    obj.clearHighlights();
+                                }
+                            }
+                            viewer.update(true);
+                        }, data.auto_clear);
+                    }
                 } else if (data.type === "animation") {
                     // turn off explode
                     viewer.setExplode(false);

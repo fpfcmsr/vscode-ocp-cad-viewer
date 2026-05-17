@@ -121,6 +121,10 @@
             "description": "cadquery or build123d"
           }
         ]
+      },
+      {
+        "command": "ocpCadViewer.highlightFromSource",
+        "title": "OCP CAD: Highlight in Viewer"
       }
     ],
     "viewsContainers": {
@@ -233,6 +237,13 @@
           "when": "view == ocpCadStatus && viewItem == console",
           "group": "inline@0"
         }
+      ],
+      "editor/context": [
+        {
+          "command": "ocpCadViewer.highlightFromSource",
+          "when": "editorLangId == python",
+          "group": "navigation"
+        }
       ]
     },
     "keybindings": [
@@ -240,6 +251,12 @@
         "command": "ocpCadViewer.ocpCadViewer",
         "key": "ctrl+k v",
         "mac": "cmd+k v",
+        "when": "editorTextFocus && editorLangId=='python'"
+      },
+      {
+        "command": "ocpCadViewer.highlightFromSource",
+        "key": "ctrl+k h",
+        "mac": "cmd+k h",
         "when": "editorTextFocus && editorLangId=='python'"
       }
     ],

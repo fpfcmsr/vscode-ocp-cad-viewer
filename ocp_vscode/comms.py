@@ -288,6 +288,9 @@ def listener(callback):
                         last_config = changes
                         callback(new_changes, MessageType.UPDATES)
 
+                    elif message.get("command") == "reverse_source_lookup":
+                        callback(message, MessageType.UPDATES)
+
                     elif message.get("command") == "stop":
                         print("Stopping Python listener")
                         break

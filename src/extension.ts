@@ -620,6 +620,18 @@ export async function activate(context: vscode.ExtensionContext) {
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand("ocpCadViewer.highlightFromSource", async () => {
+            if (controller?.isStarted()) {
+                await controller.highlightFromSource();
+            } else {
+                vscode.window.showInformationMessage(
+                    "OCP CAD Viewer is not running. Open the viewer first."
+                );
+            }
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand("ocpCadViewer.refreshStatus", () =>
             statusManager.refresh("")
         )

@@ -253,6 +253,12 @@ export class OCPCADController {
                                 const parsed = JSON.parse(data);
                                 if (parsed.subtype === "source_location") {
                                     this.jumpToSource(parsed.locations);
+                                } else if (parsed.subtype === "highlight_shapes") {
+                                    this.view?.postMessage(JSON.stringify({
+                                        type: "highlight_shapes",
+                                        shape_ids: parsed.shape_ids,
+                                        auto_clear: 5000,
+                                    }));
                                 } else {
                                     this.view?.postMessage(data);
                                 }
@@ -435,6 +441,37 @@ export class OCPCADController {
         this.statusController.refresh("<none>");
         this.statusBarItem.hide();
         output.info("OCPCADController.dispose: Server is shut down");
+    }
+
+    public async highlightFromSource() {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showInformationMessage("No active editor.");
+            return;
+        }
+        if (editor.document.languageId !== "python") {
+            vscode.window.showInformationMessage(
+                "Highlight from source is only available in Python files."
+            );
+            return;
+        }
+        if (!this.pythonListener) {
+            vscode.window.showErrorMessage(
+                "OCP CAD Viewer backend is not connected."
+            );
+            return;
+        }
+
+        const file = editor.document.uri.fsPath;
+        const line = editor.selection.active.line + 1;
+
+        const request = JSON.stringify({
+            command: "reverse_source_lookup",
+            file: file,
+            line: line,
+        });
+        this.pythonListener.send(request);
+        output.info(`Reverse source lookup: ${file}:${line}`);
     }
 
     private sourceLocationDecoration: vscode.TextEditorDecorationType | undefined;

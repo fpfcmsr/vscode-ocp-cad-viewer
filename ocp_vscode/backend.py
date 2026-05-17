@@ -91,6 +91,7 @@ class ViewerBackend:
         self.port = port
         self.model = None
         self.provenance = {}
+        self.reverse_provenance = {}
         self.source_location_mode = False
         self.activated_tool = None
         self.filter_type = "none"  # The current active selection filter
@@ -116,12 +117,18 @@ class ViewerBackend:
             if isinstance(message, dict) and "model" in message:
                 self.load_model(message["model"])
                 self.provenance = message.get("provenance", {})
+                self._build_reverse_provenance()
                 self.source_location_mode = bool(self.provenance)
             else:
                 self.load_model(message)
                 self.source_location_mode = False
         elif event_type == MessageType.UPDATES:
             changes = message
+
+            if changes.get("command") == "reverse_source_lookup":
+                return self.handle_reverse_source_lookup(
+                    changes.get("file", ""), changes.get("line", 0)
+                )
 
             if "activeTool" in changes:
                 active_tool = changes.get("activeTool")
@@ -257,6 +264,30 @@ class ViewerBackend:
         }
         send_response(dummy, self.port)
         print_to_stdout(f"Source locations sent: {locations}")
+
+    def _build_reverse_provenance(self):
+        """Build reverse index: (file, line) -> [shape_ids]."""
+        self.reverse_provenance = {}
+        for shape_id, locations in self.provenance.items():
+            for loc in locations:
+                key = (loc.get("file", ""), loc.get("line", 0))
+                self.reverse_provenance.setdefault(key, []).append(shape_id)
+
+    def handle_reverse_source_lookup(self, file, line):
+        """Look up shape IDs for a given source file and line."""
+        shape_ids = self.reverse_provenance.get((file, line), [])
+
+        response = {
+            "type": "backend_response",
+            "subtype": "highlight_shapes",
+            "shape_ids": shape_ids,
+        }
+
+        if is_jupyter_cadquery:
+            return response
+
+        send_response(response, self.port)
+        print_to_stdout(f"Reverse lookup: {file}:{line} -> {len(shape_ids)} shapes")
 
     def handle_distance(self, id1, id2, center):
         """
