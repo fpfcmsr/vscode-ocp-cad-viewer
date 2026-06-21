@@ -250,6 +250,7 @@ export class OCPCADController {
                         } else if (messageType === "R") {
                             this.view?.postMessage(data);
                             output.debug("OCPCADController.messages: Backend response received.");
+                          this.handleProvenanceJump(data);
                         }
                     } catch (error: any) {
                         output.error(`Server error: ${error.message}`);
@@ -365,6 +366,44 @@ export class OCPCADController {
             `OCP CAD Viewer: backend on port ${this.port} is not connected. ` +
                 `Restart it in the OCP backend terminal, or reopen the viewer.`
         );
+    }
+
+    private handleProvenanceJump(data: string) {
+        try {
+            const parsed = JSON.parse(data);
+            if (
+                !parsed.provenance ||
+                !Array.isArray(parsed.provenance) ||
+                parsed.provenance.length === 0
+            ) {
+                return;
+            }
+            const loc =
+                parsed.provenance.find((l: any) => l.kind === "created") ||
+                parsed.provenance[0];
+            if (!loc.filename || !loc.lineno) {
+                return;
+            }
+
+            const line = loc.lineno - 1;
+            const uri = vscode.Uri.file(loc.filename);
+            vscode.workspace.openTextDocument(uri).then((doc) => {
+                vscode.window
+                    .showTextDocument(doc, {
+                        viewColumn: vscode.ViewColumn.One,
+                        preserveFocus: true,
+                        selection: new vscode.Range(line, 0, line, 0)
+                    })
+                    .then((editor) => {
+                        editor.revealRange(
+                            new vscode.Range(line, 0, line, 0),
+                            vscode.TextEditorRevealType.InCenterIfOutsideViewport
+                        );
+                    });
+            });
+        } catch {
+            // Non-provenance responses or parse errors — ignore
+        }
     }
 
     public async stopCommandServer(): Promise<boolean> {
