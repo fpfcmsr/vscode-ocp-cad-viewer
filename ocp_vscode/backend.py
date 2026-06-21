@@ -89,6 +89,7 @@ class ViewerBackend:
         self.port = port
         self.model = None
         self.activated_tool = None
+        self.provenance = None
         self.filter_type = "none"  # The current active selection filter
         self.jcv_id = jcv_id
         set_port(port)
@@ -189,6 +190,7 @@ class ViewerBackend:
                         )
 
         self.model = {}
+        self.provenance = raw_model.pop("provenance", None)
         trace = Trace("ocp-vscode-backend.log")
         walk(raw_model, trace)
         trace.close()
@@ -203,6 +205,11 @@ class ViewerBackend:
         shape = self.model[shape_id]
 
         response = get_properties(shape)
+
+        if self.provenance is not None:
+            prov = self.provenance.get(shape_id)
+            if prov:
+                response["provenance"] = prov
 
         response["type"] = "backend_response"
         response["subtype"] = "tool_response"

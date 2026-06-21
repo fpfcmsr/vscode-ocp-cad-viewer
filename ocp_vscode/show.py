@@ -673,6 +673,7 @@ def show(
     studio_4k_env_maps=None,
     debug=None,
     timeit=None,
+    provenance=None,
     _force_in_debug=False,
 ):
     # pylint: disable=line-too-long
@@ -813,7 +814,54 @@ def show(
     return _show(*cad_objs, **none_filter(locals(), ["cad_objs"]))
 
 
-def _show(*cad_objs, **kwargs):
+def _get_leaf_ids(node):
+    """Yield leaf IDs from a mapping tree in order."""
+    if "parts" in node:
+        for part in node["parts"]:
+            yield from _get_leaf_ids(part)
+    else:
+        yield node.get("id", "")
+
+
+def _build_provenance_for_mapping(cad_objs, explicit_provenance, mapping):
+    """Build a provenance dict keyed by full viewer paths.
+
+    If *explicit_provenance* is a dict, use it directly (backwards compat).
+    Otherwise auto-detect an active provenance journal and build per-object
+    maps, then stitch them to the mapping tree's leaf IDs.
+    """
+    if isinstance(explicit_provenance, dict):
+        return explicit_provenance
+
+    try:
+        from build123d.topology import operation_journal
+    except ImportError:
+        return None
+
+    journal = operation_journal.get(None)
+    if journal is None:
+        return None
+
+    try:
+        from ocp_provenance import build_provenance_maps
+    except ImportError:
+        return None
+
+    per_obj = build_provenance_maps(journal, *cad_objs)
+    leaf_ids = list(_get_leaf_ids(mapping))
+
+    if len(per_obj) != len(leaf_ids):
+        return None
+
+    result = {}
+    for leaf_id, prov_dict in zip(leaf_ids, per_obj):
+        for key, val in prov_dict.items():
+            result[f"{leaf_id}/{key}"] = val
+
+    return result or None
+
+
+    def _show(*cad_objs, **kwargs):
     global LAST_CALL  # pylint: disable=global-statement
 
     port = kwargs.get("port")
@@ -826,6 +874,7 @@ def _show(*cad_objs, **kwargs):
     default_edgecolor = kwargs.get("default_edgecolor")
     progress = kwargs.get("progress")
     _force_in_debug = kwargs.get("_force_in_debug")
+    provenance = kwargs.pop("provenance", None)
 
     if (
         cad_objs is None
@@ -924,6 +973,12 @@ def _show(*cad_objs, **kwargs):
             progress=progress,
             **kwargs,
         )
+
+        provenance_dict = _build_provenance_for_mapping(
+            cad_objs, provenance, mapping
+        )
+        if provenance_dict:
+            mapping["provenance"] = provenance_dict
 
         if not _force_in_debug:
             LAST_CALL = "show"
