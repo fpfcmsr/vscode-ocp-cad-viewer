@@ -56,7 +56,7 @@ include-package-data = false
 ocp_vscode = ["templates/*.html", "static/css/*.css", "static/js/*.js"]
 
 [project.optional-dependencies]
-dev = ["questionary~=1.10.0", "bump-my-version", "ruff", "twine"]
+dev = ["questionary>=1.10.0", "bump-my-version", "ruff", "twine"]
 materialx = ["materialx>=1.39.4", "openexr>=3.3"]
 
 [tool.ruff]
