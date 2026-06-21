@@ -861,7 +861,7 @@ def _build_provenance_for_mapping(cad_objs, explicit_provenance, mapping):
     return result or None
 
 
-    def _show(*cad_objs, **kwargs):
+def _show(*cad_objs, **kwargs):
     global LAST_CALL  # pylint: disable=global-statement
 
     port = kwargs.get("port")
