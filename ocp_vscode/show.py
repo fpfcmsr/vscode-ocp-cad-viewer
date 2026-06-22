@@ -848,15 +848,18 @@ def _build_provenance_for_mapping(cad_objs, explicit_provenance, mapping):
         return None
 
     per_obj = build_provenance_maps(journal, *cad_objs)
-    leaf_ids = list(_get_leaf_ids(mapping))
+    top_parts = mapping.get("parts", [])
 
-    if len(per_obj) != len(leaf_ids):
+    if len(per_obj) != len(top_parts):
         return None
 
     result = {}
-    for leaf_id, prov_dict in zip(leaf_ids, per_obj):
-        for key, val in prov_dict.items():
-            result[f"{leaf_id}/{key}"] = val
+    for part_node, prov_dict in zip(top_parts, per_obj):
+        if not prov_dict:
+            continue
+        for leaf_id in _get_leaf_ids(part_node):
+            for key, val in prov_dict.items():
+                result[f"{leaf_id}/{key}"] = val
 
     return result or None
 
